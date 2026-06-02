@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.database import engine, Base
 from app.models import models
-from app.routers import auth
+from app.routers import auth, workspaces
 
 app = FastAPI(
     title="NextChat API",
@@ -24,6 +24,7 @@ async def startup():
     print("Database connected and tables created!")
 
 app.include_router(auth.router)
+app.include_router(workspaces.router)
 
 @app.get("/")
 async def root():
