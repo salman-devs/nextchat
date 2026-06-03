@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import wsService from '../services/websocket'
 import { format } from 'date-fns'
 import './Chat.css'
+import Navbar from '../components/Navbar'
+import '../components/Navbar.css'
 
 const Chat = () => {
   const { workspaceId } = useParams()
@@ -22,6 +24,7 @@ const Chat = () => {
   const [showChannelForm, setShowChannelForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
+  const [notifications, setNotifications] = useState([])
   const messagesEndRef = useRef(null)
   const typingTimeoutRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -83,6 +86,12 @@ const Chat = () => {
     if (data.event === 'message') {
       setMessages((prev) => [...prev, data])
       setTypingUsers((prev) => prev.filter((u) => u !== data.username))
+      if (data.username !== user.username) {
+        setNotifications((prev) => [...prev, {
+          message: `${data.username} in #${activeChannel?.name}: ${data.content.substring(0, 40)}`,
+          time: format(new Date(), 'HH:mm')
+        }])
+      }
     } else if (data.event === 'typing') {
       if (data.username !== user.username) {
         if (data.is_typing) {
@@ -174,183 +183,191 @@ const Chat = () => {
   }
 
   return (
-    <div className="chat-container">
-      {/* LEFT SIDEBAR */}
-      <div className="chat-sidebar">
-        <div className="sidebar-header">
-          <h3>#{activeChannel?.name || 'NextChat'}</h3>
-          <button className="back-btn" onClick={() => navigate('/dashboard')} title="Back to Dashboard">
-            ←
-          </button>
-        </div>
+    <div className="chat-container" style={{ flexDirection: 'column' }}>
+      <Navbar
+        notifications={notifications}
+        clearNotifications={() => setNotifications([])}
+      />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        <div className="sidebar-section">
-          <div className="sidebar-section-title">
-            Channels
-            <button className="add-channel-btn" onClick={() => setShowChannelForm(!showChannelForm)}>+</button>
+        {/* LEFT SIDEBAR */}
+        <div className="chat-sidebar">
+          <div className="sidebar-header">
+            <h3>#{activeChannel?.name || 'NextChat'}</h3>
+            <button className="back-btn" onClick={() => navigate('/dashboard')} title="Back to Dashboard">
+              ←
+            </button>
           </div>
 
-          {showChannelForm && (
-            <form className="create-channel-form" onSubmit={handleCreateChannel}>
-              <input
-                type="text"
-                placeholder="channel-name"
-                value={newChannelName}
-                onChange={(e) => setNewChannelName(e.target.value)}
-                autoFocus
-              />
-              <button type="submit">Add</button>
-            </form>
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">
+              Channels
+              <button className="add-channel-btn" onClick={() => setShowChannelForm(!showChannelForm)}>+</button>
+            </div>
+
+            {showChannelForm && (
+              <form className="create-channel-form" onSubmit={handleCreateChannel}>
+                <input
+                  type="text"
+                  placeholder="channel-name"
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit">Add</button>
+              </form>
+            )}
+
+            {channels.map((channel) => (
+              <div
+                key={channel.id}
+                className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''}`}
+                onClick={() => setActiveChannel(channel)}
+              >
+                <span className="channel-hash">#</span>
+                {channel.name}
+              </div>
+            ))}
+          </div>
+
+          {/* Current user */}
+          <div className="sidebar-user">
+            <div className="user-avatar">
+              {user?.username?.charAt(0).toUpperCase()}
+            </div>
+            <div className="user-info">
+              <span>{user?.username}</span>
+              <small>● Online</small>
+            </div>
+            <button className="logout-btn" onClick={handleLogout} title="Logout">⏻</button>
+          </div>
+        </div>
+
+        {/* MAIN CHAT */}
+        <div className="chat-main">
+          <div className="chat-header">
+            <div className="chat-header-left">
+              <span style={{ color: 'var(--text-muted)', fontSize: '18px' }}>#</span>
+              <h3>{activeChannel?.name || 'Select a channel'}</h3>
+            </div>
+            <div className="chat-header-right">
+              <div className="search-bar">
+                <span>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  value={searchQuery}
+                  onChange={handleSearch}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              margin: '8px 20px',
+              borderRadius: '8px',
+              padding: '12px',
+              maxHeight: '200px',
+              overflowY: 'auto'
+            }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Search Results ({searchResults.length})
+              </p>
+              {searchResults.map((msg) => (
+                <div key={msg.id} style={{
+                  padding: '6px 8px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  borderBottom: '1px solid var(--border)'
+                }}>
+                  {msg.content}
+                </div>
+              ))}
+            </div>
           )}
 
-          {channels.map((channel) => (
-            <div
-              key={channel.id}
-              className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''}`}
-              onClick={() => setActiveChannel(channel)}
-            >
-              <span className="channel-hash">#</span>
-              {channel.name}
+          {/* Messages */}
+          <div className="messages-area">
+            {!activeChannel ? (
+              <div className="no-channel">
+                <span>💬</span>
+                <p>Select a channel to start chatting</p>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="no-channel">
+                <span>👋</span>
+                <p>No messages yet. Say hello!</p>
+              </div>
+            ) : (
+              messages.map((msg, index) => (
+                <div key={msg.id || index} className="message-item">
+                  <div className="message-avatar">
+                    {(msg.username || msg.sender_id)?.toString().charAt(0).toUpperCase()}
+                  </div>
+                  <div className="message-body">
+                    <div className="message-header">
+                      <span className="message-username">{msg.username || `User ${msg.sender_id}`}</span>
+                      <span className="message-time">{formatTime(msg.created_at)}</span>
+                    </div>
+                    <div className="message-content">{msg.content}</div>
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Typing Indicator */}
+          <div className="typing-indicator">
+            {typingUsers.length > 0 && `${typingUsers.join(', ')} is typing...`}
+          </div>
+
+          {/* Message Input */}
+          {activeChannel && (
+            <div className="message-input-area">
+              <div className="message-input-box">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                />
+                <button className="file-btn" onClick={() => fileInputRef.current.click()}>📎</button>
+                <input
+                  type="text"
+                  placeholder={`Message #${activeChannel?.name}`}
+                  value={newMessage}
+                  onChange={handleTyping}
+                  onKeyDown={handleKeyDown}
+                />
+                <button className="send-btn" onClick={handleSendMessage}>➤</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT MEMBERS SIDEBAR */}
+        <div className="members-sidebar">
+          <div className="members-title">Members — {members.length}</div>
+          {members.map((member) => (
+            <div key={member.user_id} className="member-item">
+              <div className="member-avatar">
+                {member.username?.charAt(0).toUpperCase()}
+                <span className={onlineUsers[member.user_id] ? 'online-dot' : 'offline-dot'}></span>
+              </div>
+              <div>
+                <div className="member-name">{member.username}</div>
+                <div className="member-role">{member.role}</div>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Current user */}
-        <div className="sidebar-user">
-          <div className="user-avatar">
-            {user?.username?.charAt(0).toUpperCase()}
-          </div>
-          <div className="user-info">
-            <span>{user?.username}</span>
-            <small>● Online</small>
-          </div>
-          <button className="logout-btn" onClick={handleLogout} title="Logout">⏻</button>
-        </div>
-      </div>
-
-      {/* MAIN CHAT */}
-      <div className="chat-main">
-        <div className="chat-header">
-          <div className="chat-header-left">
-            <span style={{ color: 'var(--text-muted)', fontSize: '18px' }}>#</span>
-            <h3>{activeChannel?.name || 'Select a channel'}</h3>
-          </div>
-          <div className="chat-header-right">
-            <div className="search-bar">
-              <span>🔍</span>
-              <input
-                type="text"
-                placeholder="Search messages..."
-                value={searchQuery}
-                onChange={handleSearch}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <div style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            margin: '8px 20px',
-            borderRadius: '8px',
-            padding: '12px',
-            maxHeight: '200px',
-            overflowY: 'auto'
-          }}>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Search Results ({searchResults.length})
-            </p>
-            {searchResults.map((msg) => (
-              <div key={msg.id} style={{
-                padding: '6px 8px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                color: 'var(--text-secondary)',
-                borderBottom: '1px solid var(--border)'
-              }}>
-                {msg.content}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Messages */}
-        <div className="messages-area">
-          {!activeChannel ? (
-            <div className="no-channel">
-              <span>💬</span>
-              <p>Select a channel to start chatting</p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="no-channel">
-              <span>👋</span>
-              <p>No messages yet. Say hello!</p>
-            </div>
-          ) : (
-            messages.map((msg, index) => (
-              <div key={msg.id || index} className="message-item">
-                <div className="message-avatar">
-                  {(msg.username || msg.sender_id)?.toString().charAt(0).toUpperCase()}
-                </div>
-                <div className="message-body">
-                  <div className="message-header">
-                    <span className="message-username">{msg.username || `User ${msg.sender_id}`}</span>
-                    <span className="message-time">{formatTime(msg.created_at)}</span>
-                  </div>
-                  <div className="message-content">{msg.content}</div>
-                </div>
-              </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Typing Indicator */}
-        <div className="typing-indicator">
-          {typingUsers.length > 0 && `${typingUsers.join(', ')} is typing...`}
-        </div>
-
-        {/* Message Input */}
-        {activeChannel && (
-          <div className="message-input-area">
-            <div className="message-input-box">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                style={{ display: 'none' }}
-              />
-              <button className="file-btn" onClick={() => fileInputRef.current.click()}>📎</button>
-              <input
-                type="text"
-                placeholder={`Message #${activeChannel?.name}`}
-                value={newMessage}
-                onChange={handleTyping}
-                onKeyDown={handleKeyDown}
-              />
-              <button className="send-btn" onClick={handleSendMessage}>➤</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* RIGHT MEMBERS SIDEBAR */}
-      <div className="members-sidebar">
-        <div className="members-title">Members — {members.length}</div>
-        {members.map((member) => (
-          <div key={member.user_id} className="member-item">
-            <div className="member-avatar">
-              {member.username?.charAt(0).toUpperCase()}
-              <span className={onlineUsers[member.user_id] ? 'online-dot' : 'offline-dot'}></span>
-            </div>
-            <div>
-              <div className="member-name">{member.username}</div>
-              <div className="member-role">{member.role}</div>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   )
