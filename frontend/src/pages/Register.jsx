@@ -23,6 +23,8 @@ const Register = () => {
       await register(formData)
       const res = await login({ email: formData.email, password: formData.password })
       const token = res.data.access_token
+      // Set token in localStorage BEFORE calling getMe
+      localStorage.setItem('token', token)
       const userRes = await getMe()
       loginUser(token, userRes.data)
       navigate('/dashboard')
