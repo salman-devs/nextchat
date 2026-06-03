@@ -1,3 +1,8 @@
+import os
+import uuid
+from fastapi import File, UploadFile
+import aiofiles
+from app.models.models import File as FileModel
 from sqlalchemy import or_
 from app.models.models import Channel
 from fastapi import APIRouter, Depends, WebSocket, Query
@@ -56,3 +61,56 @@ def search_messages(
             "created_at": str(msg.created_at)
         } for msg in results
     ]}
+@router.post("/upload/{channel_id}")
+async def upload_file(
+    channel_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Generate unique filename
+    ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{ext}"
+    file_path = f"uploads/{unique_filename}"
+
+    # Save file to disk
+    async with aiofiles.open(file_path, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+
+    # Save message with file
+    new_message = Message(
+        content=f"📎 {file.filename}",
+        channel_id=channel_id,
+        sender_id=current_user.id
+    )
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+
+    # Save file record
+    new_file = FileModel(
+        file_url=file_path,
+        message_id=new_message.id
+    )
+    db.add(new_file)
+    db.commit()
+
+    # Broadcast to channel
+    from app.websocket.manager import manager
+    await manager.broadcast_to_channel({
+        "event": "message",
+        "id": new_message.id,
+        "content": new_message.content,
+        "channel_id": channel_id,
+        "sender_id": current_user.id,
+        "username": current_user.username,
+        "file_url": file_path,
+        "created_at": str(new_message.created_at)
+    }, channel_id)
+
+    return {
+        "message": "File uploaded successfully",
+        "file_url": file_path,
+        "filename": file.filename
+    }
