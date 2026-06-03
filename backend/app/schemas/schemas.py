@@ -65,3 +65,15 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MemberRoleUpdate(BaseModel):
+    role: RoleEnum
+
+class WorkspaceMemberResponse(BaseModel):
+    id: int
+    user_id: int
+    workspace_id: int
+    role: RoleEnum
+
+    class Config:
+        from_attributes = True
