@@ -1,4 +1,4 @@
-const WS_URL = 'ws://127.0.0.1:8000'
+const WS_URL = 'wss://nextchat-backend-nnyh.onrender.com'
 
 class WebSocketService {
   constructor() {
