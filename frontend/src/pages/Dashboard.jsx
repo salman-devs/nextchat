@@ -7,7 +7,7 @@ import './Dashboard.css'
 const Dashboard = () => {
   const [workspaces, setWorkspaces] = useState([])
   const [newWorkspace, setNewWorkspace] = useState('')
-  const [joinId, setJoinId] = useState('')
+  const [joinCode, setJoinCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const { user, logoutUser } = useAuth()
@@ -42,11 +42,11 @@ const Dashboard = () => {
 
   const handleJoin = async (e) => {
     e.preventDefault()
-    if (!joinId.trim()) return
+    if (!joinCode.trim()) return
     try {
-      await joinWorkspace(joinId)
+      await joinWorkspace(joinCode)
       fetchWorkspaces()
-      setJoinId('')
+      setJoinCode('')
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to join workspace')
     }
@@ -94,7 +94,7 @@ const Dashboard = () => {
                   </div>
                   <div className="workspace-info">
                     <h3>{ws.name}</h3>
-                    <p>Click to open</p>
+                    <p>Code: <strong>{ws.invite_code}</strong></p>
                   </div>
                 </div>
               ))
@@ -125,10 +125,10 @@ const Dashboard = () => {
             <form onSubmit={handleJoin}>
               <input
                 className="input-field"
-                type="number"
-                placeholder="Enter workspace ID"
-                value={joinId}
-                onChange={(e) => setJoinId(e.target.value)}
+                type="text"
+                placeholder="Enter invite code (e.g. AB12CD34)"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
               />
               <button className="btn-primary" type="submit">Join</button>
             </form>

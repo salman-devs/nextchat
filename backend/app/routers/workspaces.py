@@ -3,9 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database.database import get_db
 from app.models.models import Workspace, WorkspaceMember, RoleEnum, User
-from app.schemas.schemas import WorkspaceCreate, WorkspaceResponse
+from app.schemas.schemas import WorkspaceCreate, WorkspaceResponse, MemberRoleUpdate
 from app.auth.auth import get_current_user
-from app.schemas.schemas import MemberRoleUpdate
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
 
@@ -15,7 +14,6 @@ def create_workspace(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Create workspace
     new_workspace = Workspace(
         name=workspace.name,
         owner_id=current_user.id
@@ -24,7 +22,6 @@ def create_workspace(
     db.commit()
     db.refresh(new_workspace)
 
-    # Add creator as owner member
     member = WorkspaceMember(
         workspace_id=new_workspace.id,
         user_id=current_user.id,
@@ -40,11 +37,36 @@ def get_workspaces(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Get all workspaces where user is a member
     workspaces = db.query(Workspace).join(WorkspaceMember).filter(
         WorkspaceMember.user_id == current_user.id
     ).all()
     return workspaces
+
+@router.post("/join/{invite_code}")
+def join_workspace(
+    invite_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.query(Workspace).filter(Workspace.invite_code == invite_code).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    existing = db.query(WorkspaceMember).filter(
+        WorkspaceMember.workspace_id == workspace.id,
+        WorkspaceMember.user_id == current_user.id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already a member")
+
+    member = WorkspaceMember(
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        role=RoleEnum.member
+    )
+    db.add(member)
+    db.commit()
+    return {"message": "Joined workspace successfully"}
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
 def get_workspace(
@@ -66,41 +88,13 @@ def delete_workspace(
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    
-    # Only owner can delete
+
     if workspace.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only owner can delete workspace")
-    
+
     db.delete(workspace)
     db.commit()
     return {"message": "Workspace deleted successfully"}
-
-@router.post("/{workspace_id}/join")
-def join_workspace(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    # Check if already a member
-    existing = db.query(WorkspaceMember).filter(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.user_id == current_user.id
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Already a member")
-
-    member = WorkspaceMember(
-        workspace_id=workspace_id,
-        user_id=current_user.id,
-        role=RoleEnum.member
-    )
-    db.add(member)
-    db.commit()
-    return {"message": "Joined workspace successfully"}
 
 @router.get("/{workspace_id}/members")
 def get_workspace_members(
@@ -108,7 +102,6 @@ def get_workspace_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Check if current user is member
     member = db.query(WorkspaceMember).filter(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == current_user.id
@@ -141,7 +134,6 @@ def update_member_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Check if current user is owner
     current_member = db.query(WorkspaceMember).filter(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == current_user.id
@@ -149,7 +141,6 @@ def update_member_role(
     if not current_member or current_member.role != RoleEnum.owner:
         raise HTTPException(status_code=403, detail="Only owner can update roles")
 
-    # Find target member
     target_member = db.query(WorkspaceMember).filter(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == user_id
@@ -157,7 +148,6 @@ def update_member_role(
     if not target_member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    # Owner cannot be demoted
     if target_member.role == RoleEnum.owner:
         raise HTTPException(status_code=400, detail="Cannot change owner's role")
 
@@ -172,7 +162,6 @@ def remove_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Check if current user is owner or admin
     current_member = db.query(WorkspaceMember).filter(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == current_user.id
@@ -180,7 +169,6 @@ def remove_member(
     if not current_member or current_member.role not in [RoleEnum.owner, RoleEnum.admin]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # Find target member
     target_member = db.query(WorkspaceMember).filter(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == user_id
@@ -188,7 +176,6 @@ def remove_member(
     if not target_member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    # Cannot remove owner
     if target_member.role == RoleEnum.owner:
         raise HTTPException(status_code=400, detail="Cannot remove workspace owner")
 

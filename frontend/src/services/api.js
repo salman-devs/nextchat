@@ -24,7 +24,7 @@ export const getMe = () => api.get('/auth/me')
 export const getWorkspaces = () => api.get('/workspaces/')
 export const createWorkspace = (data) => api.post('/workspaces/', data)
 export const deleteWorkspace = (id) => api.delete(`/workspaces/${id}`)
-export const joinWorkspace = (id) => api.post(`/workspaces/${id}/join`)
+export const joinWorkspace = (invite_code) => api.post(`/workspaces/join/${invite_code}`)
 export const getWorkspaceMembers = (id) => api.get(`/workspaces/${id}/members`)
 
 // Channels

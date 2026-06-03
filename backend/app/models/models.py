@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.database import Base
 import enum
-
+import uuid
 class RoleEnum(str, enum.Enum):
     owner = "owner"
     admin = "admin"
@@ -34,6 +34,7 @@ class Workspace(Base):
     owner = relationship("User")
     members = relationship("WorkspaceMember", back_populates="workspace")
     channels = relationship("Channel", back_populates="workspace")
+    invite_code = Column(String, unique=True, default=lambda: str(uuid.uuid4())[:8].upper())
 
 class WorkspaceMember(Base):
     __tablename__ = "workspace_members"

@@ -34,6 +34,7 @@ class WorkspaceResponse(BaseModel):
     id: int
     name: str
     owner_id: int
+    invite_code: str
     created_at: datetime
 
     class Config:
